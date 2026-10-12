@@ -69,9 +69,24 @@ def clean(s):
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", s or "")).strip()
 
 
+def split_name(a):
+    """Return {'g': given, 'f': family}. Accepts (given, family) tuples or free-text names."""
+    if isinstance(a, (tuple, list)):
+        g, f = a
+        return {"g": clean(g), "f": clean(f)}
+    a = clean(a)
+    if "," in a:
+        f, g = a.split(",", 1)
+        return {"g": g.strip(), "f": f.strip()}
+    parts = a.split(" ")
+    return {"g": " ".join(parts[:-1]), "f": parts[-1]}
+
+
 def rec(source, title, authors, date, venue, cites, doi, url, abstract):
     date = date or ""
-    return {"source": source, "title": clean(title), "authors": [a for a in authors if a],
+    authors = [split_name(a) for a in authors if a and (isinstance(a, str) or any(a))]
+    return {"source": source, "title": clean(title),
+            "authors": [a for a in authors if re.search(r"[^\W\d_]{2}", a["f"])],  # drop junk like "-"
             "date": date, "year": int(date[:4]) if date[:4].isdigit() else None, "venue": clean(venue),
             "cites": cites or 0, "doi": (doi or "").lower().replace("https://doi.org/", ""),
             "url": url or "", "abstract": clean(abstract)}
@@ -103,7 +118,7 @@ def crossref(q):
             dp = ((w.get("issued") or {}).get("date-parts") or [[None]])[0]
             date = "-".join(f"{x:02d}" if i else str(x) for i, x in enumerate(dp) if x) if dp and dp[0] else ""
             out.append(rec("Crossref", (w.get("title") or [""])[0],
-                           [f"{a.get('given','')} {a.get('family','')}".strip() for a in w.get("author", [])],
+                           [(a.get("given", ""), a.get("family") or a.get("name", "")) for a in w.get("author", [])],
                            date, (w.get("container-title") or [""])[0], w.get("is-referenced-by-count"),
                            w.get("DOI"), w.get("URL"), w.get("abstract")))
     return out
@@ -123,7 +138,7 @@ def pubmed(q):
         pmid = art.findtext(".//PMID")
         doi = next((e.text for e in art.iter("ArticleId") if e.get("IdType") == "doi"), "")
         y = art.findtext(".//JournalIssue/PubDate/Year") or (art.findtext(".//PubDate/MedlineDate") or "")[:4]
-        auth = [f"{x.findtext('ForeName','')} {x.findtext('LastName','')}".strip() for x in a.iter("Author")]
+        auth = [(x.findtext("ForeName", ""), x.findtext("LastName") or x.findtext("CollectiveName", "")) for x in a.iter("Author")]
         ab = " ".join("".join(t.itertext()) for t in a.iter("AbstractText"))
         out.append(rec("PubMed", "".join(a.find("ArticleTitle").itertext()), auth, y, a.findtext(".//Journal/Title"),
                        0, doi, f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/", ab))
@@ -138,7 +153,8 @@ def europepmc(q):
         doi = w.get("doi") or ""
         url = f"https://doi.org/{doi}" if doi else f"https://europepmc.org/article/{w.get('source')}/{w.get('id')}"
         src = "Europe PMC" + (" (preprint)" if w.get("source") == "PPR" else "")
-        out.append(rec(src, w.get("title"), (w.get("authorString") or "").rstrip(".").split(", "),
+        out.append(rec(src, w.get("title"), [(x.get("firstName") or "", x.get("lastName") or x.get("fullName") or "")
+                        for x in (w.get("authorList") or {}).get("author", [])],
                        w.get("firstPublicationDate"), w.get("journalTitle") or (w.get("bookOrReportDetails") or {}).get("publisher"),
                        w.get("citedByCount"), doi, url, w.get("abstractText")))
     return out
@@ -209,19 +225,24 @@ def to_paper(r):
     ab = r["abstract"]
     return {
         "id": pid(key(r)), "title": r["title"],
-        "authors": ", ".join(r["authors"][:4]) + (" et al." if len(r["authors"]) > 4 else ""),
+        "authors": r["authors"],
         "year": r["year"], "date": r["date"], "venue": r["venue"], "cites": r["cites"],
         "link": f"https://doi.org/{r['doi']}" if r["doi"] else r["url"],
         "topic": "Predictive modeling & engagement" if any(p in r["title"].lower() for p in PRED)
                  else "Neurocinematics & film neuroscience",
         "tags": [t for t, rx in TAGS.items() if re.search(rx, text)],
         "sources": [r["source"].split(" (")[0] + (" preprint" if "preprint" in r["source"] else "")],
-        "snippet": (ab[:380] + "…") if len(ab) > 380 else ab,
+        "abstract": ab,
     }
 
 
 def main():
     old = json.loads(DATA.read_text()) if DATA.exists() else {"papers": [], "runs": []}
+    for p in old["papers"]:  # migrate earlier file formats
+        if isinstance(p.get("authors"), str):
+            p["authors"] = [split_name(a) for a in p["authors"].replace(" et al.", "").split(", ") if a]
+        if "snippet" in p:
+            p["abstract"] = p.pop("snippet").rstrip("…")
     papers = {p["id"]: p for p in old["papers"]}
     # The first two days seed the list (sources may be rate-limited on day one), so nothing in them counts as "new"
     first_run = len({r["date"] for r in old["runs"] if r["date"] != TODAY}) < 2
@@ -234,7 +255,7 @@ def main():
             except Exception as e:
                 n_fail += 1
                 print(f"[{name}] '{q}' failed: {str(e)[:80]}")
-                if name in ("Semantic Scholar", "arXiv") and n_fail >= 2:
+                if n_fail >= 2:
                     break  # rate-limited or unreachable: skip the rest, try again tomorrow
                 continue
             n_ok += 1
@@ -247,7 +268,8 @@ def main():
                     cur["cites"] = max(cur.get("cites") or 0, p["cites"] or 0)
                     cur["sources"] = sorted(set(cur["sources"]) | set(p["sources"]))
                     cur["tags"] = sorted(set(cur["tags"]) | set(p["tags"]))
-                    if len(p["snippet"]) > len(cur.get("snippet", "")): cur["snippet"] = p["snippet"]
+                    if len(p["abstract"]) > len(cur.get("abstract", "")): cur["abstract"] = p["abstract"]
+                    if len(p["authors"]) > len(cur.get("authors", [])): cur["authors"] = p["authors"]
                     if not cur.get("venue"): cur["venue"] = p["venue"]
                 else:
                     p["first_seen"] = TODAY

@@ -4,162 +4,112 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Neurocinematics Research Tracker</title>
-<meta name="description" content="Daily-updated list of research papers on neurocinematics and predictive modeling of cinematic engagement.">
-<style>
-:root{--bg:#f6f7f9;--card:#fff;--text:#1b1d23;--mute:#667085;--line:#e4e7ec;--accent:#4f46e5;--accent-bg:#eef0ff;--new:#12805c;--new-bg:#dcf5ea}
-@media(prefers-color-scheme:dark){:root{--bg:#121318;--card:#1c1e26;--text:#e9eaf0;--mute:#9aa1b2;--line:#2b2e39;--accent:#8b93ff;--accent-bg:#262a4a;--new:#5fd6a6;--new-bg:#16382d}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
-header{padding:28px 16px 8px;max-width:920px;margin:0 auto}
-h1{margin:0;font-size:26px}
-.sub{color:var(--mute);margin:4px 0 0}
-main{max-width:920px;margin:0 auto;padding:0 16px 48px}
-.tabs{display:flex;gap:6px;margin:18px 0 12px;border-bottom:1px solid var(--line)}
-.tab{background:none;border:0;padding:10px 14px;font:inherit;color:var(--mute);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
-.tab[aria-selected=true]{color:var(--accent);border-color:var(--accent);font-weight:600}
-.controls{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;margin-bottom:10px}
-input,select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);min-width:0}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
-.chip{border:1px solid var(--line);background:var(--card);color:var(--text);padding:4px 10px;border-radius:99px;font:inherit;font-size:13px;cursor:pointer}
-.chip[aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
-.count{color:var(--mute);font-size:13px;margin:4px 0 10px}
-.paper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
-.paper h3{margin:0 0 4px;font-size:16px;line-height:1.35}
-.paper a{color:inherit;text-decoration:none}.paper a:hover h3{color:var(--accent);text-decoration:underline}
-.meta{color:var(--mute);font-size:13px}
-.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.badge{font-size:11.5px;padding:2px 8px;border-radius:5px;background:var(--accent-bg);color:var(--accent)}
-.badge.new{background:var(--new-bg);color:var(--new);font-weight:600}
-.badge.src{background:transparent;border:1px dashed var(--line);color:var(--mute)}
-.badge.topic{background:transparent;border:1px solid var(--line);color:var(--mute)}
-details{margin-top:8px}summary{cursor:pointer;color:var(--accent);font-size:13px}
-.snip{font-size:14px;color:var(--mute);margin:6px 0 0}
-.day{margin:22px 0 8px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
-.day small{font-weight:400;color:var(--mute)}
-.empty{text-align:center;color:var(--mute);padding:40px 0}
-button.more{display:block;margin:16px auto;padding:9px 18px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;cursor:pointer}
-footer{max-width:920px;margin:0 auto;padding:0 16px 40px;color:var(--mute);font-size:13px}
-footer a{color:var(--accent)}
-@media(max-width:600px){.controls{grid-template-columns:1fr 1fr}.controls select{width:100%}.controls input{grid-column:1/-1}h1{font-size:22px}}
-</style>
+<meta name="description" content="A daily-updated, searchable library of research on neurocinematics and predictive modelling of cinematic engagement, with a dashboard and citation export.">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<header>
-  <h1>Neurocinematics Research Tracker</h1>
-  <p class="sub" id="status">Loading…</p>
-</header>
-<main>
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-view="all" aria-selected="true">All papers</button>
-    <button class="tab" role="tab" data-view="new" aria-selected="false">New this week</button>
-    <button class="tab" role="tab" data-view="history" aria-selected="false">History</button>
+<a class="skip" href="#main">Skip to main content</a>
+
+<!-- Progress screen shown while the library loads -->
+<div id="loader" role="dialog" aria-modal="true" aria-labelledby="loadTitle">
+  <div class="loader-card">
+    <h1 id="loadTitle">Neurocinematics Research Tracker</h1>
+    <p class="muted" id="loadMsg" role="status">Starting…</p>
+    <div class="progress indet" id="loadBar" role="progressbar" aria-labelledby="loadMsg" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+    <ol class="steps" id="loadSteps">
+      <li data-step="1" class="active">Downloading the paper library</li>
+      <li data-step="2">Indexing titles, authors and abstracts</li>
+      <li data-step="3">Building the dashboard</li>
+    </ol>
+    <div id="loadErr" class="err" hidden role="alert"></div>
+    <noscript><p class="err">This tracker needs JavaScript to run.</p></noscript>
   </div>
-  <div id="filters">
-    <div class="controls">
-      <input id="q" type="search" placeholder="Search title, author, abstract…" aria-label="Search">
-      <select id="topic" aria-label="Topic"><option value="">All topics</option></select>
-      <select id="source" aria-label="Source"><option value="">All sources</option></select>
-      <select id="sort" aria-label="Sort">
-        <option value="cites">Most cited</option>
-        <option value="year">Newest published</option>
-        <option value="seen">Recently added</option>
-      </select>
+</div>
+
+<div id="app" hidden>
+  <header class="site-header">
+    <div class="wrap">
+      <div class="brand">
+        <h1>Neurocinematics Research Tracker</h1>
+        <p>Neurocinematics and predictive modelling of cinematic engagement. Updated daily.</p>
+      </div>
+      <nav aria-label="Main">
+        <ul>
+          <li><a href="#/dashboard" data-nav="dashboard">Dashboard</a></li>
+          <li><a href="#/library" data-nav="library">Library</a></li>
+          <li><a href="#/history" data-nav="history">History</a></li>
+        </ul>
+      </nav>
     </div>
-    <div class="chips" id="tags"></div>
+  </header>
+  <div class="wrap"><main id="main" tabindex="-1"></main></div>
+  <footer>
+    <div class="wrap">
+      <p id="footMeta"></p>
+      <p>Sources: OpenAlex, Crossref, PubMed, Europe PMC (including bioRxiv and medRxiv), arXiv, Semantic Scholar and DOAJ. Duplicates are merged. Papers are matched automatically, so verify details before citing. Author names are split into given and family names automatically, so check references before submitting them.</p>
+    </div>
+  </footer>
+</div>
+
+<div id="selbar" class="selbar" hidden role="region" aria-label="Selected papers">
+  <div class="wrap">
+    <strong id="selCount">0 selected</strong>
+    <button class="btn primary small" id="selExport" type="button">Export…</button>
+    <button class="btn small" id="selCollect" type="button">Add to collection…</button>
+    <button class="linkbtn" id="selClear" type="button">Clear selection</button>
   </div>
-  <div class="count" id="count"></div>
-  <div id="list"></div>
-</main>
-<footer>
-  Sources: OpenAlex, Crossref, PubMed, Europe PMC (incl. bioRxiv/medRxiv), arXiv, Semantic Scholar and DOAJ. Refreshed daily by GitHub Actions; duplicates are merged. Matching is automatic, so check each paper before citing it.
-</footer>
-<script>
-const $ = s => document.querySelector(s);
-const state = {view:'all', tag:null, shown:30, data:null};
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const daysAgo = d => Math.floor((Date.now() - new Date(d + 'T00:00:00')) / 864e5);
-const isNew = p => !p.baseline && daysAgo(p.first_seen) <= 7;
+</div>
 
-function card(p){
-  return `<article class="paper">
-    <a href="${esc(p.link)}" target="_blank" rel="noopener"><h3>${esc(p.title)}</h3></a>
-    <div class="meta">${esc(p.authors)} · ${esc(p.year)}${p.venue ? ' · <i>' + esc(p.venue) + '</i>' : ''} · ${p.cites} citations</div>
-    <div class="badges">
-      ${isNew(p) ? '<span class="badge new">NEW</span>' : ''}
-      <span class="badge topic">${esc(p.topic)}</span>
-      ${p.tags.map(t => `<span class="badge">${esc(t)}</span>`).join('')}
-      ${(p.sources||[]).map(s => `<span class="badge src">${esc(s)}</span>`).join('')}
+<!-- Export dialog -->
+<dialog id="exportDlg" aria-labelledby="exTitle">
+  <form method="dialog" id="exForm">
+    <div class="dlg-h"><h2 id="exTitle">Export papers</h2><button class="btn small" value="cancel" formnovalidate>Close</button></div>
+    <div class="dlg-b">
+      <fieldset><legend>What to export</legend><div id="exScope"></div></fieldset>
+      <fieldset><legend>Format</legend>
+        <p class="muted" style="margin:0 0 6px"><strong>References</strong> (for Zotero, EndNote, Mendeley, LaTeX, Word)</p>
+        <label class="opt"><input type="radio" name="fmt" value="bibtex"><span>BibTeX (.bib)<small>LaTeX, Overleaf, Zotero, JabRef</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="ris"><span>RIS (.ris)<small>EndNote, Zotero, Mendeley, RefWorks</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="apa"><span>APA 7th edition list (.txt)<small>Ready to paste into a manuscript</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="csl"><span>CSL JSON (.json)<small>Pandoc, Zotero and other citation tools</small></span></label>
+        <label class="check" id="exAbsWrap"><input type="checkbox" id="exAbs"><span>Include abstracts in reference files</span></label>
+        <p class="muted" style="margin:12px 0 6px"><strong>Data and abstracts</strong></p>
+        <label class="opt"><input type="radio" name="fmt" value="csv"><span>Spreadsheet (.csv), details only<small>Title, authors, year, journal, citations, DOI, methods, sources</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="csvabs"><span>Spreadsheet (.csv), with abstracts<small>Same columns plus the full abstract</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="abstracts"><span>Abstracts only (.txt)<small>Readable text: title, authors, DOI and abstract for each paper</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="md"><span>Abstracts only (.md)<small>Markdown with headings and links</small></span></label>
+        <label class="opt"><input type="radio" name="fmt" value="json"><span>All data (.json)<small>Every field, for scripts and analysis</small></span></label>
+      </fieldset>
+      <div class="exp-progress" id="exProg" hidden>
+        <p id="exMsg" role="status" style="margin:0 0 6px">Preparing…</p>
+        <div class="progress" id="exBar" role="progressbar" aria-labelledby="exMsg" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div>
+      </div>
     </div>
-    ${p.snippet ? `<details><summary>Abstract</summary><p class="snip">${esc(p.snippet)}</p></details>` : ''}
-  </article>`;
-}
+    <div class="dlg-f">
+      <button class="btn" type="button" id="exCopy">Copy to clipboard</button>
+      <button class="btn primary" type="button" id="exGo">Download</button>
+    </div>
+  </form>
+</dialog>
 
-function filtered(){
-  const q = $('#q').value.trim().toLowerCase(), topic = $('#topic').value, src = $('#source').value;
-  let r = state.data.papers.filter(p =>
-    (!topic || p.topic === topic) && (!src || (p.sources||[]).includes(src)) &&
-    (!state.tag || p.tags.includes(state.tag)) &&
-    (!q || (p.title + ' ' + p.authors + ' ' + p.snippet + ' ' + p.venue).toLowerCase().includes(q)));
-  if (state.view === 'new') r = r.filter(isNew);
-  const s = $('#sort').value;
-  r.sort(s === 'cites' ? (a,b) => b.cites - a.cites
-       : s === 'year' ? (a,b) => (b.date||'').localeCompare(a.date||'')
-       : (a,b) => b.first_seen.localeCompare(a.first_seen) || b.cites - a.cites);
-  return r;
-}
+<!-- Collection dialog -->
+<dialog id="colDlg" aria-labelledby="colTitle">
+  <form method="dialog" id="colForm">
+    <div class="dlg-h"><h2 id="colTitle">Add to collection</h2><button class="btn small" value="cancel" formnovalidate>Close</button></div>
+    <div class="dlg-b">
+      <p id="colInfo" style="margin-top:0"></p>
+      <label class="field" for="colName">Collection name</label>
+      <input type="text" id="colName" list="colList" autocomplete="off" style="width:100%" aria-describedby="colHelp">
+      <datalist id="colList"></datalist>
+      <p class="muted" id="colHelp">Type a new name to create a collection, or pick an existing one. Collections are saved in this browser only. Use them to group papers by project or chapter.</p>
+    </div>
+    <div class="dlg-f"><button class="btn primary" type="button" id="colSave">Add papers</button></div>
+  </form>
+</dialog>
 
-function render(){
-  const list = $('#list');
-  $('#filters').style.display = state.view === 'history' ? 'none' : '';
-  if (state.view === 'history') {
-    $('#count').textContent = '';
-    const by = {};
-    state.data.papers.filter(p => !p.baseline).forEach(p => (by[p.first_seen] ||= []).push(p));
-    const days = Object.keys(by).sort().reverse();
-    const runs = [...state.data.runs].reverse();
-    list.innerHTML = runs.length ? runs.map(r => {
-      const items = by[r.date] || [];
-      return `<div class="day"><span>${new Date(r.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric'})}</span>
-        <small>${r.baseline ? 'initial load' : '+' + items.length + ' new'} · ${r.total} total</small></div>` +
-        (items.length ? items.map(card).join('') : '<div class="meta" style="padding:0 0 6px">No new papers.</div>');
-    }).join('') : '<div class="empty">No history yet.</div>';
-    return;
-  }
-  const r = filtered();
-  $('#count').textContent = `${r.length} paper${r.length === 1 ? '' : 's'}`;
-  list.innerHTML = r.length
-    ? r.slice(0, state.shown).map(card).join('') + (r.length > state.shown ? '<button class="more">Show more</button>' : '')
-    : `<div class="empty">${state.view === 'new' ? 'Nothing new in the last 7 days. Check back tomorrow.' : 'No papers match.'}</div>`;
-  const more = list.querySelector('.more');
-  if (more) more.onclick = () => { state.shown += 30; render(); };
-}
+<div id="toast" role="status" hidden></div>
+<div id="announce" class="sr" aria-live="polite" aria-atomic="true"></div>
 
-fetch('data/papers.json', {cache:'no-cache'}).then(r => r.json()).then(d => {
-  state.data = d;
-  // mark the first run as the baseline in history
-  d.runs.forEach((r,i) => { if (i === 0 && d.papers.some(p => p.baseline && p.first_seen === r.date)) r.baseline = true; });
-  $('#status').textContent = `${d.papers.length} papers · last updated ${d.updated} · ${d.papers.filter(isNew).length} new this week`;
-  Object.entries(d.source_counts||{}).sort((a,b)=>b[1]-a[1]).forEach(([s,n]) => $('#source').insertAdjacentHTML('beforeend', `<option value="${esc(s)}">${esc(s)} (${n})</option>`));
-  [...new Set(d.papers.map(p => p.topic))].sort().forEach(t => $('#topic').insertAdjacentHTML('beforeend', `<option>${esc(t)}</option>`));
-  const counts = {}; d.papers.forEach(p => p.tags.forEach(t => counts[t] = (counts[t]||0)+1));
-  $('#tags').innerHTML = Object.keys(counts).sort((a,b) => counts[b]-counts[a])
-    .map(t => `<button class="chip" aria-pressed="false" data-tag="${esc(t)}">${esc(t)} (${counts[t]})</button>`).join('');
-  render();
-}).catch(() => { $('#status').textContent = 'Could not load data/papers.json'; });
-
-document.addEventListener('click', e => {
-  const tab = e.target.closest('.tab'), chip = e.target.closest('.chip');
-  if (tab) {
-    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t === tab));
-    state.view = tab.dataset.view; state.shown = 30; render();
-  }
-  if (chip) {
-    state.tag = state.tag === chip.dataset.tag ? null : chip.dataset.tag;
-    document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.tag === state.tag));
-    state.shown = 30; render();
-  }
-});
-['#q', '#topic', '#source', '#sort'].forEach(s => $(s).addEventListener('input', () => { state.shown = 30; render(); }));
-</script>
+<script src="app.js"></script>
 </body>
 </html>
