@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neurocinematics Research Tracker</title>
+<meta name="description" content="Daily-updated list of research papers on neurocinematics and predictive modeling of cinematic engagement.">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--text:#1b1d23;--mute:#667085;--line:#e4e7ec;--accent:#4f46e5;--accent-bg:#eef0ff;--new:#12805c;--new-bg:#dcf5ea}
+@media(prefers-color-scheme:dark){:root{--bg:#121318;--card:#1c1e26;--text:#e9eaf0;--mute:#9aa1b2;--line:#2b2e39;--accent:#8b93ff;--accent-bg:#262a4a;--new:#5fd6a6;--new-bg:#16382d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{padding:28px 16px 8px;max-width:920px;margin:0 auto}
+h1{margin:0;font-size:26px}
+.sub{color:var(--mute);margin:4px 0 0}
+main{max-width:920px;margin:0 auto;padding:0 16px 48px}
+.tabs{display:flex;gap:6px;margin:18px 0 12px;border-bottom:1px solid var(--line)}
+.tab{background:none;border:0;padding:10px 14px;font:inherit;color:var(--mute);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab[aria-selected=true]{color:var(--accent);border-color:var(--accent);font-weight:600}
+.controls{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-bottom:10px}
+input,select{font:inherit;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);min-width:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--text);padding:4px 10px;border-radius:99px;font:inherit;font-size:13px;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.count{color:var(--mute);font-size:13px;margin:4px 0 10px}
+.paper{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.paper h3{margin:0 0 4px;font-size:16px;line-height:1.35}
+.paper a{color:inherit;text-decoration:none}.paper a:hover h3{color:var(--accent);text-decoration:underline}
+.meta{color:var(--mute);font-size:13px}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.badge{font-size:11.5px;padding:2px 8px;border-radius:5px;background:var(--accent-bg);color:var(--accent)}
+.badge.new{background:var(--new-bg);color:var(--new);font-weight:600}
+.badge.topic{background:transparent;border:1px solid var(--line);color:var(--mute)}
+details{margin-top:8px}summary{cursor:pointer;color:var(--accent);font-size:13px}
+.snip{font-size:14px;color:var(--mute);margin:6px 0 0}
+.day{margin:22px 0 8px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+.day small{font-weight:400;color:var(--mute)}
+.empty{text-align:center;color:var(--mute);padding:40px 0}
+button.more{display:block;margin:16px auto;padding:9px 18px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;cursor:pointer}
+footer{max-width:920px;margin:0 auto;padding:0 16px 40px;color:var(--mute);font-size:13px}
+footer a{color:var(--accent)}
+@media(max-width:600px){.controls{grid-template-columns:1fr 1fr}.controls input{grid-column:1/-1}h1{font-size:22px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Neurocinematics Research Tracker</h1>
+  <p class="sub" id="status">Loading…</p>
+</header>
+<main>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="all" aria-selected="true">All papers</button>
+    <button class="tab" role="tab" data-view="new" aria-selected="false">New this week</button>
+    <button class="tab" role="tab" data-view="history" aria-selected="false">History</button>
+  </div>
+  <div id="filters">
+    <div class="controls">
+      <input id="q" type="search" placeholder="Search title, author, abstract…" aria-label="Search">
+      <select id="topic" aria-label="Topic"><option value="">All topics</option></select>
+      <select id="sort" aria-label="Sort">
+        <option value="cites">Most cited</option>
+        <option value="year">Newest published</option>
+        <option value="seen">Recently added</option>
+      </select>
+    </div>
+    <div class="chips" id="tags"></div>
+  </div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+</main>
+<footer>
+  Data from <a href="https://openalex.org">OpenAlex</a>, refreshed daily by GitHub Actions. Matching is automatic, so check each paper before citing it.
+</footer>
+<script>
+const $ = s => document.querySelector(s);
+const state = {view:'all', tag:null, shown:30, data:null};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const daysAgo = d => Math.floor((Date.now() - new Date(d + 'T00:00:00')) / 864e5);
+const isNew = p => !p.baseline && daysAgo(p.first_seen) <= 7;
+
+function card(p){
+  return `<article class="paper">
+    <a href="${esc(p.link)}" target="_blank" rel="noopener"><h3>${esc(p.title)}</h3></a>
+    <div class="meta">${esc(p.authors)} · ${esc(p.year)}${p.venue ? ' · <i>' + esc(p.venue) + '</i>' : ''} · ${p.cites} citations</div>
+    <div class="badges">
+      ${isNew(p) ? '<span class="badge new">NEW</span>' : ''}
+      <span class="badge topic">${esc(p.topic)}</span>
+      ${p.tags.map(t => `<span class="badge">${esc(t)}</span>`).join('')}
+    </div>
+    ${p.snippet ? `<details><summary>Abstract</summary><p class="snip">${esc(p.snippet)}</p></details>` : ''}
+  </article>`;
+}
+
+function filtered(){
+  const q = $('#q').value.trim().toLowerCase(), topic = $('#topic').value;
+  let r = state.data.papers.filter(p =>
+    (!topic || p.topic === topic) &&
+    (!state.tag || p.tags.includes(state.tag)) &&
+    (!q || (p.title + ' ' + p.authors + ' ' + p.snippet + ' ' + p.venue).toLowerCase().includes(q)));
+  if (state.view === 'new') r = r.filter(isNew);
+  const s = $('#sort').value;
+  r.sort(s === 'cites' ? (a,b) => b.cites - a.cites
+       : s === 'year' ? (a,b) => (b.date||'').localeCompare(a.date||'')
+       : (a,b) => b.first_seen.localeCompare(a.first_seen) || b.cites - a.cites);
+  return r;
+}
+
+function render(){
+  const list = $('#list');
+  $('#filters').style.display = state.view === 'history' ? 'none' : '';
+  if (state.view === 'history') {
+    $('#count').textContent = '';
+    const by = {};
+    state.data.papers.filter(p => !p.baseline).forEach(p => (by[p.first_seen] ||= []).push(p));
+    const days = Object.keys(by).sort().reverse();
+    const runs = [...state.data.runs].reverse();
+    list.innerHTML = runs.length ? runs.map(r => {
+      const items = by[r.date] || [];
+      return `<div class="day"><span>${new Date(r.date+'T00:00:00').toLocaleDateString(undefined,{weekday:'short',year:'numeric',month:'short',day:'numeric'})}</span>
+        <small>${r.baseline ? 'initial load' : '+' + items.length + ' new'} · ${r.total} total</small></div>` +
+        (items.length ? items.map(card).join('') : '<div class="meta" style="padding:0 0 6px">No new papers.</div>');
+    }).join('') : '<div class="empty">No history yet.</div>';
+    return;
+  }
+  const r = filtered();
+  $('#count').textContent = `${r.length} paper${r.length === 1 ? '' : 's'}`;
+  list.innerHTML = r.length
+    ? r.slice(0, state.shown).map(card).join('') + (r.length > state.shown ? '<button class="more">Show more</button>' : '')
+    : `<div class="empty">${state.view === 'new' ? 'Nothing new in the last 7 days. Check back tomorrow.' : 'No papers match.'}</div>`;
+  const more = list.querySelector('.more');
+  if (more) more.onclick = () => { state.shown += 30; render(); };
+}
+
+fetch('data/papers.json', {cache:'no-cache'}).then(r => r.json()).then(d => {
+  state.data = d;
+  // mark the first run as the baseline in history
+  d.runs.forEach((r,i) => { if (i === 0 && d.papers.some(p => p.baseline && p.first_seen === r.date)) r.baseline = true; });
+  $('#status').textContent = `${d.papers.length} papers · last updated ${d.updated} · ${d.papers.filter(isNew).length} new this week`;
+  [...new Set(d.papers.map(p => p.topic))].sort().forEach(t => $('#topic').insertAdjacentHTML('beforeend', `<option>${esc(t)}</option>`));
+  const counts = {}; d.papers.forEach(p => p.tags.forEach(t => counts[t] = (counts[t]||0)+1));
+  $('#tags').innerHTML = Object.keys(counts).sort((a,b) => counts[b]-counts[a])
+    .map(t => `<button class="chip" aria-pressed="false" data-tag="${esc(t)}">${esc(t)} (${counts[t]})</button>`).join('');
+  render();
+}).catch(() => { $('#status').textContent = 'Could not load data/papers.json'; });
+
+document.addEventListener('click', e => {
+  const tab = e.target.closest('.tab'), chip = e.target.closest('.chip');
+  if (tab) {
+    document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t === tab));
+    state.view = tab.dataset.view; state.shown = 30; render();
+  }
+  if (chip) {
+    state.tag = state.tag === chip.dataset.tag ? null : chip.dataset.tag;
+    document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', c.dataset.tag === state.tag));
+    state.shown = 30; render();
+  }
+});
+['#q', '#topic', '#sort'].forEach(s => $(s).addEventListener('input', () => { state.shown = 30; render(); }));
+</script>
+</body>
+</html>
