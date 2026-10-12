@@ -53,12 +53,12 @@ def http(url, retries=2):
     for i in range(retries + 1):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "neurocinematics-tracker (research list)"})
-            with urllib.request.urlopen(req, timeout=30, context=_ctx()) as r:
+            with urllib.request.urlopen(req, timeout=20, context=_ctx()) as r:
                 return r.read()
         except Exception as e:
             if i == retries:
                 raise
-            time.sleep(3 * (i + 1))
+            time.sleep(15 if "429" in str(e) else 3)
 
 
 def jget(url):
@@ -172,7 +172,10 @@ def doaj(q):
         b = w["bibjson"]
         doi = next((i["id"] for i in b.get("identifier", []) if i["type"] == "doi"), "")
         link = next((l["url"] for l in b.get("link", [])), "")
-        d0 = f"{b.get('year','')}-{int(b.get('month') or 1):02d}-01" if b.get("year") else ""
+        m = str(b.get("month") or "1")
+        m = m.zfill(2) if m.isdigit() else {n: f"{i:02d}" for i, n in enumerate(
+            "January February March April May June July August September October November December".split(), 1)}.get(m, "01")
+        d0 = f"{b.get('year','')}-{m}-01" if b.get("year") else ""
         out.append(rec("DOAJ", b.get("title"), [a.get("name") for a in b.get("author", [])], d0,
                        (b.get("journal") or {}).get("title"), 0, doi, link, b.get("abstract")))
     return out
@@ -220,7 +223,8 @@ def to_paper(r):
 def main():
     old = json.loads(DATA.read_text()) if DATA.exists() else {"papers": [], "runs": []}
     papers = {p["id"]: p for p in old["papers"]}
-    first_run = not papers
+    # The first two days seed the list (sources may be rate-limited on day one), so nothing in them counts as "new"
+    first_run = len({r["date"] for r in old["runs"] if r["date"] != TODAY}) < 2
     stats = {}
     for name, fn in SOURCES:
         n_ok = n_fail = 0
@@ -230,8 +234,8 @@ def main():
             except Exception as e:
                 n_fail += 1
                 print(f"[{name}] '{q}' failed: {str(e)[:80]}")
-                if name == "Semantic Scholar" and n_fail >= 2:
-                    break
+                if name in ("Semantic Scholar", "arXiv") and n_fail >= 2:
+                    break  # rate-limited or unreachable: skip the rest, try again tomorrow
                 continue
             n_ok += 1
             for r in recs:
@@ -249,7 +253,7 @@ def main():
                     p["first_seen"] = TODAY
                     p["baseline"] = first_run
                     papers[p["id"]] = p
-            time.sleep(0.4)
+            time.sleep(3 if name in ('arXiv', 'Semantic Scholar') else 1)
         stats[name] = {"ok": n_ok, "failed": n_fail}
         print(f"[{name}] {n_ok} ok, {n_fail} failed")
     added = sum(1 for p in papers.values() if p["first_seen"] == TODAY and not first_run)
